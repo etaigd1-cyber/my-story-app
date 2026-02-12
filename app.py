@@ -1,67 +1,41 @@
 import streamlit as st
 import google.generativeai as genai
 
-# --- הגדרות בסיסיות ועיצוב ספרותי ---
-st.set_page_config(page_title="הסיפור האינטראקטיבי שלי", page_icon="📖", layout="centered")
+# --- הגדרות עיצוב RTL וספרותי ---
+st.set_page_config(page_title="הסיפור שלי", page_icon="📖")
 
-# עיצוב CSS מתקדם למראה של ספר ויישור לימין
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;700&display=swap');
-    
     html, body, [data-testid="stAppViewContainer"] {
         direction: RTL;
         text-align: right;
         font-family: 'Assistant', sans-serif;
-        background-color: #fdf6e3; /* צבע נייר ישן */
+        background-color: #fdf6e3;
     }
-    
-    .stChatMessage {
-        direction: RTL !important;
-    }
-    
-    div[data-testid="stChatMessageContent"] p {
-        font-size: 1.2rem;
-        line-height: 1.6;
-        color: #2c3e50;
-    }
-
-    /* עיצוב תיבת הקלט */
-    .stChatInputContainer {
-        direction: RTL;
-    }
-    
-    /* כותרות */
-    h1 {
-        color: #8b4513;
-        text-align: center;
-    }
+    .stChatMessage { direction: RTL !important; }
+    div[data-testid="stChatMessageContent"] p { font-size: 1.15rem; line-height: 1.6; color: #2c3e50; }
+    .stChatInputContainer { direction: RTL; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- חיבור ל-API ---
 if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("חסר מפתח API ב-Secrets!")
+    st.error("מפתח API חסר ב-Secrets!")
     st.stop()
 
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
 def get_system_instruction(age, genre):
-    base = "אתה מספר סיפורים מקצועי. כתוב בעברית ספרותית עשירה, גוף שלישי בלבד."
+    base = "אתה מספר סיפורים מקצועי. כתוב בעברית עשירה, גוף שלישי."
     if age < 8:
-        style = f"סגנון: ספר ילדים לגילאי {age}. שפה קסומה, ללא סכנה, דגש על דמיון וחברות."
+        style = f"סגנון: ספר ילדים לגילאי {age}. שפה קסומה ופשוטה."
     else:
-        styles = {
-            "מתח": "אווירה קרירה, משפטים קצרים, דופק גבוה וסכנה מוחשית.",
-            "רומנטיקה": "דגש על רגש, כימיה, תיאורי אווירה ודיאלוגים רגישים.",
-            "קומדיה": "טון משעשע, אירוניה ומצבים אבסורדיים.",
-            "ספר ילדים": "הרפתקה קלאסית עם שפה עשירה."
-        }
+        styles = {"מתח": "מתח גבוה.", "רומנטיקה": "רגשות וכימיה.", "קומדיה": "הומור ושנינות.", "ספר ילדים": "הרפתקה."}
         style = f"סגנון: {styles.get(genre, 'פרוזה')}. התאם לגיל {age}."
-    
-    return f"{base} {style} בסוף כל חלק תן שתי אופציות או בקש מהקורא להקליד פעולה. הוסף [IMAGE_PROMPT: description] בסוף."
+    return f"{base} {style} בסוף כל חלק בקש מהקורא להחליט מה לעשות."
 
-# --- ניהול מצב האפליקציה ---
+# --- ניהול הזיכרון ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "chat" not in st.session_state:
@@ -70,46 +44,52 @@ if "chat" not in st.session_state:
 # --- תפריט צד ---
 with st.sidebar:
     st.title("📚 הגדרות")
-    age = st.number_input("גיל:", 3, 120, 30)
+    age = st.number_input("גיל הקורא:", 3, 120, 30)
     genre = st.selectbox("ג'אנר:", ["מתח", "רומנטיקה", "קומדיה", "ספר ילדים"])
-    if st.button("🗑️ מחק סיפור והתחל מחדש"):
+    if st.button("🔄 אתחל סיפור"):
         st.session_state.messages = []
         st.session_state.chat = None
         st.rerun()
 
 # --- לוגיקת הסיפור ---
 if st.session_state.chat is None:
-    st.write("### מוכן להתחיל בהרפתקה?")
-    if st.button("📖 התחל לקרוא"):
+    if st.button("🚀 התחל את הסיפור"):
         try:
-            # שימוש בשם מודל מעודכן ורחב יותר
+            # שימוש בשם המודל הכי נפוץ וסטנדרטי
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash", 
+                model_name='gemini-1.5-flash',
                 system_instruction=get_system_instruction(age, genre)
             )
             st.session_state.chat = model.start_chat(history=[])
-            prompt = f"התחל סיפור {genre} לגיל {age}. פתח בסצנה ראשונה מרתקת."
+            prompt = f"התחל סיפור {genre} לגיל {age}. פתח בסצנה ראשונה."
             response = st.session_state.chat.send_message(prompt)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
             st.rerun()
         except Exception as e:
-            st.error(f"שגיאה בחיבור למנוע הסיפור: {e}")
+            # אם flash לא עובד, נסה pro כגיבוי
+            try:
+                model = genai.GenerativeModel(model_name='gemini-1.5-pro', system_instruction=get_system_instruction(age, genre))
+                st.session_state.chat = model.start_chat(history=[])
+                response = st.session_state.chat.send_message(f"התחל סיפור {genre} לגיל {age}.")
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
+                st.rerun()
+            except:
+                st.error(f"שגיאה בחיבור למנוע: {e}")
 
-# הצגת הסיפור
+# תצוגה
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+        st.write(msg["content"])
 
-# קלט מהמשתמש
-if user_input := st.chat_input("מה הדמות תעשה?"):
+if user_input := st.chat_input("מה לעשות?"):
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
-        st.markdown(user_input)
+        st.write(user_input)
     
     try:
         response = st.session_state.chat.send_message(user_input)
         st.session_state.messages.append({"role": "assistant", "content": response.text})
         with st.chat_message("assistant"):
-            st.markdown(response.text)
+            st.write(response.text)
     except Exception as e:
-        st.error(f"הסיפור נקטע בגלל שגיאה: {e}")
+        st.error(f"שגיאה: {e}")
