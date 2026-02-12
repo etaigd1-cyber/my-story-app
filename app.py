@@ -1,58 +1,95 @@
 import streamlit as st
 import google.generativeai as genai
 
-# הגדרת ה-API (החלף ב-Key שלך)
-genai.configure(api_key="YOUR_GEMINI_API_KEY")
+# --- הגדרות בסיסיות ועיצוב (RTL) ---
+st.set_page_config(page_title="הספר האינטראקטיבי שלי", page_icon="📖", layout="centered")
 
-# --- ממשק המשתמש (UI) ---
-st.set_page_config(page_title="מספר הסיפורים האינטראקטיבי", page_icon="📖")
-st.title("📖 בנה את הסיפור שלך")
+# הזרקת CSS כדי שהטקסט ייראה טוב בעברית ויהיה מיושר לימין
+st.markdown("""
+    <style>
+    .stApp {
+        direction: RTL;
+        text-align: right;
+    }
+    div[data-testid="stChatMessageContent"] {
+        text-align: right;
+        direction: RTL;
+    }
+    </style>
+    """, unsafe_allow_name=True)
 
-# תפריט צד להגדרות
-with st.sidebar:
-    st.header("הגדרות סיפור")
-    age = st.number_input("גיל הקורא:", min_value=3, max_value=120, value=30)
-    genre = st.selectbox("בחר ג'אנר:", ["מתח", "רומנטיקה", "קומדיה", "ספר ילדים"])
-    
-# לוגיקת הפרומפט המשתנה
+# --- חיבור ל-API בצורה בטוחה ---
+if "GOOGLE_API_KEY" not in st.secrets:
+    st.error("שגיאה: מפתח ה-API לא נמצא ב-Secrets של Streamlit.")
+    st.stop()
+
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+
+# --- לוגיקת הפרומפט (המוח) ---
 def get_system_instruction(age, genre):
-    base = "אתה מנוע סיפור אינטראקטיבי בעברית. כתוב בגוף שלישי."
-    
+    base = "אתה מנוע סיפור אינטראקטיבי בעברית. כתוב בגוף שלישי בסגנון ספרותי עשיר."
     if age < 8:
-        return f"{base} סגנון: ספר ילדים לגילאי {age}. שפה פשוטה, קסומה ומעודדת. אין מוות או סכנה קיצונית. התמקד בערכים והרפתקאות מתוקות."
+        return f"{base} סגנון: ספר ילדים לגילאי {age}. שפה פשוטה וקסומה. ללא אלימות. התמקד בהרפתקה."
     
     styles = {
-        "מתח": "סגנון בוגר, אפל, מותח ומציאותי. החלטות שגויות עלולות להוביל לכישלון או מוות.",
-        "רומנטיקה": "התמקד ברגשות, מתח בין-אישי, תיאורי אווירה ודיאלוגים רגישים.",
-        "קומדיה": "סגנון קליל, מצחיק, משתמש בהומור מצבים ובשנינות.",
-        "ספר ילדים": "שפה עשירה אך מותאמת לילדים, דגש על הרפתקאות ודמיון."
+        "מתח": "אווירה אפלה, מותחת ומציאותית. סכנה מוחשית וכישלון אפשרי.",
+        "רומנטיקה": "דגש על רגשות, מתח בין-אישי ותיאורי אווירה.",
+        "קומדיה": "סגנון קליל, הומור מצבים ושנינות.",
+        "ספר ילדים": "שפה עשירה ומלאת דמיון המותאמת לילדים."
     }
+    return f"{base} סגנון: {styles.get(genre, 'פרוזה')}. גיל היעד: {age}."
+
+# --- ניהול הזיכרון (Session State) ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "chat_started" not in st.session_state:
+    st.session_state.chat_started = False
+
+# --- תפריט צד להגדרות ---
+with st.sidebar:
+    st.header("⚙️ הגדרות הסיפור")
+    user_age = st.number_input("גיל הקורא:", min_value=3, max_value=120, value=30)
+    user_genre = st.selectbox("בחר ג'אנר:", ["מתח", "רומנטיקה", "קומדיה", "ספר ילדים"])
     
-    return f"{base} {styles.get(genre, '')} גיל היעד הוא {age}. אם המשתמש מבקש 'תזכורת', פרט את מצבו והחפצים שלו."
-
-# --- ניהול הזיכרון (Chat Session) ---
-if "chat" not in st.session_state:
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-pro",
-        system_instruction=get_system_instruction(age, genre)
-    )
-    st.session_state.chat = model.start_chat(history=[])
-    st.session_state.story_started = False
-
-# התחלת הסיפור
-if not st.session_state.story_started:
-    if st.button("התחל את המסע"):
-        response = st.session_state.chat.send_message(f"התחל סיפור חדש בג'אנר {genre} עבור קורא בגיל {age}.")
-        st.session_state.story_started = True
+    if st.button("🔄 התחל סיפור חדש"):
+        st.session_state.messages = []
+        st.session_state.chat_started = False
         st.rerun()
 
-# הצגת היסטוריית הסיפור
-for message in st.session_state.chat.history:
-    role = "📖" if message.role == "model" else "👤"
-    with st.chat_message(message.role, avatar=role):
-        st.markdown(message.parts[0].text)
+# --- תחילת המשחק ---
+if not st.session_state.chat_started:
+    st.info("ברוכים הבאים! הגדירו גיל וג'אנר בתפריט הצד ולחצו על הכפתור למטה כדי להתחיל.")
+    if st.button("🚀 התחל את המסע"):
+        # אתחול המודל
+        instruction = get_system_instruction(user_age, user_genre)
+        model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction=instruction)
+        st.session_state.chat = model.start_chat(history=[])
+        
+        # הודעה ראשונה
+        first_prompt = f"התחל סיפור חדש בג'אנר {user_genre} עבור קורא בגיל {user_age}."
+        response = st.session_state.chat.send_message(first_prompt)
+        
+        st.session_state.messages.append({"role": "assistant", "content": response.text})
+        st.session_state.chat_started = True
+        st.rerun()
 
-# קלט מהמשתמש
+# --- הצגת היסטוריית ההודעות (עיצוב צ'אט) ---
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
+
+# --- קלט מהמשתמש ---
 if user_input := st.chat_input("מה הדמות עושה?"):
-    response = st.session_state.chat.send_message(user_input)
-    st.rerun()
+    # הצגת הודעת המשתמש
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.chat_message("user"):
+        st.write(user_input)
+    
+    # שליחה ל-AI וקבלת תשובה
+    try:
+        response = st.session_state.chat.send_message(user_input)
+        st.session_state.messages.append({"role": "assistant", "content": response.text})
+        with st.chat_message("assistant"):
+            st.write(response.text)
+    except Exception as e:
+        st.error(f"אירעה שגיאה בתקשורת: {e}")
