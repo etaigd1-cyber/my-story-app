@@ -18,6 +18,26 @@ st.markdown("""
     
     .stChatMessage {
         direction: RTL !important;
+    }import streamlit as st
+import google.generativeai as genai
+
+# --- הגדרות בסיסיות ועיצוב ספרותי ---
+st.set_page_config(page_title="הסיפור האינטראקטיבי שלי", page_icon="📖", layout="centered")
+
+# עיצוב CSS מתקדם למראה של ספר ויישור לימין
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;700&display=swap');
+    
+    html, body, [data-testid="stAppViewContainer"] {
+        direction: RTL;
+        text-align: right;
+        font-family: 'Assistant', sans-serif;
+        background-color: #fdf6e3; /* צבע נייר ישן */
+    }
+    
+    .stChatMessage {
+        direction: RTL !important;
     }
     
     div[data-testid="stChatMessageContent"] p {
